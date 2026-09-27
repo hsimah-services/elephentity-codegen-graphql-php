@@ -1,3 +1,4 @@
 /target/
 /vendor/
 /composer.lock
+/tests/vendor/
