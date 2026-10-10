@@ -7,6 +7,7 @@ use Eleph\Runtime\Conformance\Verifier;
 use Eleph\GraphQL\Manifest\Manifest;
 
 $manifest = require __DIR__ . '/graphql-manifest.php';
+assert($manifest instanceof Manifest);
 
 return new class($manifest) implements Verifier
 {
