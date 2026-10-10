@@ -112,3 +112,23 @@ foreach (['clog', 'relations', 'book'] as $case) {
         echo "PASS: generated schema queries, Relay pagination, IDs, enums, mutations, actions and verifier\n";
     });
 }
+
+generated(fixture('book'), function (string $directory): void {
+    $runtimeSchema = schema($directory, new Gateway());
+    foreach (array_keys($runtimeSchema->getTypeMap()) as $name) {
+        if (!str_ends_with($name, 'Connection') && !str_ends_with($name, 'ConnectionEdge') && !str_ends_with($name, 'Input') && !str_ends_with($name, 'Payload') && !str_ends_with($name, 'WhereArgs')) continue;
+        $request = fixture('book');
+        $shadow = $request['schema']['entities']['Book'];
+        $shadow['name'] = 'Shadow';
+        $shadow['fields'] = []; $shadow['queries'] = []; $shadow['actions'] = [];
+        $shadow['integrations']['graphql'] = ['singular' => $name, 'plural' => $name . 'Collection'];
+        $request['schema']['entities']['Shadow'] = $shadow;
+        try {
+            generated($request, fn () => throw new LogicException('Collision was accepted: ' . $name));
+            throw new LogicException('Collision was accepted: ' . $name);
+        } catch (RuntimeException $error) {
+            check(str_contains($error->getMessage(), $name) && str_contains($error->getMessage(), 'duplicated'), 'Expected a generated-type collision error: ' . $error->getMessage());
+        }
+    }
+    echo "PASS: every automatic type from actual runtime assembly is reserved by generation\n";
+});

@@ -151,3 +151,50 @@ fn generated_php_has_checked_types_at_the_boundary() {
     let body = response["files"].as_array().unwrap().iter().find(|file| file["path"] == "verify.php").unwrap()["body"].as_str().unwrap();
     assert!(body.contains("assert($manifest instanceof Manifest);"));
 }
+
+#[test]
+fn refuses_every_automatic_type_collision_before_emitting_files() {
+    for name in [
+        "RootQueryToBookConnection",
+        "RootQueryToBookConnectionEdge",
+        "CreateBookInput",
+        "UpdateBookPayload",
+        "RenameBookInput",
+        "RootQueryToSearchBooksConnectionWhereArgs",
+        "RootQueryToSearchBooksConnection",
+    ] {
+        let mut request = fixture("book");
+        let mut shadow = request["schema"]["entities"]["Book"].clone();
+        shadow["name"] = json!("Shadow");
+        shadow["integrations"]["graphql"] =
+            json!({"singular":name,"plural":format!("{name}Collection")});
+        shadow["queries"] = json!({});
+        shadow["actions"] = json!({});
+        shadow["fields"] = json!({});
+        request["schema"]["entities"]["Shadow"] = shadow;
+        let response = generate(&request);
+        assert_eq!(response["files"], json!([]), "{name}");
+        assert!(!response["errors"].as_array().unwrap().is_empty(), "{name}");
+    }
+}
+
+#[test]
+fn reserves_forward_inverse_and_self_connection_types() {
+    for name in [
+        "PostToCommentConnection",
+        "AuthorToCommentConnectionEdge",
+        "PostToPostConnection",
+        "TagToPostConnection",
+    ] {
+        let mut request = fixture("relations");
+        let mut shadow = request["schema"]["entities"]["Author"].clone();
+        shadow["name"] = json!("Shadow");
+        shadow["integrations"]["graphql"] =
+            json!({"singular":name,"plural":format!("{name}Collection")});
+        shadow["fields"] = json!({});
+        request["schema"]["entities"]["Shadow"] = shadow;
+        let response = generate(&request);
+        assert_eq!(response["files"], json!([]), "{name}");
+        assert!(!response["errors"].as_array().unwrap().is_empty());
+    }
+}

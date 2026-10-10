@@ -1,5 +1,5 @@
 use super::*;
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 fn claim(names: &mut BTreeSet<String>, name: &str, scope: &str) -> Result<()> {
     let mut chars = name.chars();
     if name.starts_with("__")
@@ -27,6 +27,50 @@ fn enumeration(names: &mut BTreeSet<String>, name: &str, values: &Value) -> Resu
     }
     Ok(())
 }
+fn connection(
+    types: &mut BTreeSet<String>,
+    connections: &mut BTreeMap<String, String>,
+    from: &str,
+    to: &str,
+    field: Option<&str>,
+) -> Result<()> {
+    let suffix = field.map(cap).unwrap_or_else(|| to.to_owned());
+    let name = format!("{from}To{suffix}Connection");
+    if let Some(previous) = connections.get(&name) {
+        if previous != to {
+            return Err(format!(
+                "GraphQL connection {name:?} targets both {previous:?} and {to:?}."
+            ));
+        }
+    } else {
+        claim(types, &name, "generated connection types")?;
+        claim(types, &format!("{name}Edge"), "generated edge types")?;
+        connections.insert(name.clone(), to.into());
+    }
+    if field.is_some() {
+        claim(
+            types,
+            &format!("{name}WhereArgs"),
+            "generated query argument types",
+        )?;
+    }
+    Ok(())
+}
+fn mutation(
+    types: &mut BTreeSet<String>,
+    mutations: &mut BTreeSet<String>,
+    name: &str,
+) -> Result<()> {
+    claim(mutations, name, "mutations")?;
+    for suffix in ["Input", "Payload"] {
+        claim(
+            types,
+            &format!("{}{suffix}", cap(name)),
+            "generated mutation types",
+        )?;
+    }
+    Ok(())
+}
 fn reference(schema: &Value, r: &Value) -> Result<()> {
     if r["primitive"].is_null() && schema["types"][s(&r["declaredType"])].is_null() {
         return Err(format!("Unknown declared type {}.", s(&r["declaredType"])));
@@ -48,6 +92,7 @@ pub fn validate(schema: &Value) -> Result<()> {
     .into_iter()
     .map(str::to_owned)
     .collect::<BTreeSet<_>>();
+    let mut connections = BTreeMap::new();
     let mut roots = BTreeSet::new();
     let mut mutations = BTreeSet::new();
     for t in vals(&schema["types"]) {
@@ -62,6 +107,7 @@ pub fn validate(schema: &Value) -> Result<()> {
         }
         let n = name(e);
         claim(&mut types, n, "types")?;
+        connection(&mut types, &mut connections, "RootQuery", n, None)?;
         claim(&mut roots, &low(n), "root fields")?;
         claim(&mut roots, &low(&plural(e)), "root fields")?;
         let mut fields = ["id".to_owned(), "databaseId".to_owned()]
@@ -89,6 +135,15 @@ pub fn validate(schema: &Value) -> Result<()> {
         for edge in vals(&e["edges"]) {
             if exposure(&schema["entities"][s(&edge["to"])]) {
                 claim(&mut fields, s(&edge["name"]), n)?;
+                if edge["cardinality"] == "many" {
+                    connection(
+                        &mut types,
+                        &mut connections,
+                        n,
+                        name(&schema["entities"][s(&edge["to"])]),
+                        None,
+                    )?;
+                }
             }
         }
         for declaring in &entities {
@@ -103,17 +158,20 @@ pub fn validate(schema: &Value) -> Result<()> {
                         s(&edge["inverse"]["name"]).into()
                     };
                     claim(&mut fields, &inverse, n)?;
+                    if !b(&edge["inverse"]["unique"]) {
+                        connection(&mut types, &mut connections, n, name(declaring), None)?;
+                    }
                 }
             }
         }
         for kind in ["create", "update", "delete"] {
-            claim(&mut mutations, &format!("{kind}{n}"), "mutations")?;
+            mutation(&mut types, &mut mutations, &format!("{kind}{n}"))?;
         }
         for action in vals(&e["actions"]) {
-            claim(
+            mutation(
+                &mut types,
                 &mut mutations,
                 &format!("{}{n}", s(&action["name"])),
-                "mutations",
             )?;
             let mut arguments = ["id".to_owned(), "clientMutationId".to_owned()]
                 .into_iter()
@@ -137,6 +195,15 @@ pub fn validate(schema: &Value) -> Result<()> {
                 .as_str()
                 .unwrap_or(s(&query["name"]));
             claim(&mut roots, field, "root fields")?;
+            if query["returns"]["cardinality"] == "many" {
+                connection(
+                    &mut types,
+                    &mut connections,
+                    "RootQuery",
+                    name(&schema["entities"][s(&query["returns"]["type"])]),
+                    Some(field),
+                )?;
+            }
             let mut arguments = BTreeSet::new();
             for a in vals(&query["arguments"]) {
                 claim(&mut arguments, s(&a["name"]), "query arguments")?;
