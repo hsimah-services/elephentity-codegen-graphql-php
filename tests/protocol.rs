@@ -148,7 +148,14 @@ fn gives_default_collection_a_distinct_name() {
 #[test]
 fn generated_php_has_checked_types_at_the_boundary() {
     let response = generate(&fixture("book"));
-    let body = response["files"].as_array().unwrap().iter().find(|file| file["path"] == "verify.php").unwrap()["body"].as_str().unwrap();
+    let body = response["files"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|file| file["path"] == "verify.php")
+        .unwrap()["body"]
+        .as_str()
+        .unwrap();
     assert!(body.contains("assert($manifest instanceof Manifest);"));
 }
 
