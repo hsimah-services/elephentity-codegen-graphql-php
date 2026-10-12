@@ -1,7 +1,7 @@
 {
     "name": "elephentity/test-codegen-graphql-php",
     "description": "Runtime acceptance test dependencies.",
-    "license": "Apache-2.0",
+    "license": "MIT",
     "repositories": [
         {
             "type": "vcs",

@@ -2,7 +2,7 @@
 
 The protocol entrypoint, typed IR decoder, checkout launcher and initial request
 fixtures were adapted from `hsimah-services/elephentity-codegen-wpgraphql` at
-`a71640e973e51026cb608b753524fb32094a6fe1`, under Apache-2.0.
+`a71640e973e51026cb608b753524fb32094a6fe1`; that repository is relicensed to MIT in the same step and the code is owner-authored.
 
 GraphQL manifest generation is adapted to the `graphql` integration and the
 `Eleph\GraphQL` runtime. Naming validation and a self-contained conformance verifier
